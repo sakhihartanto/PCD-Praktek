@@ -9,11 +9,13 @@ from PIL import Image, ImageTk
 import cv2 as cv
 import numpy as np
 from numpy.core.fromnumeric import var
+from matplotlib import pyplot as plt
+
 
 
 root = Tk()
 
-root.title('191524030')
+root.title('191524030 - Muhammad Sakhi Hartanto')
 
 
 effect = None
@@ -85,6 +87,7 @@ def sampling():
     image = cv.pyrDown(currImage)
     dim   = ((currImage.shape[1]), currImage.shape[0])
     image = cv.resize(image, dim, interpolation = cv.INTER_AREA)
+    histogram(currImage, image)
     my_label = Label(root, text = "Sampling Berhasil Di Tambahkan!")
     my_label.pack()
     root.title("Sampling")
@@ -95,6 +98,7 @@ def bw():
 
     image = np.array(currImage)
     image= cv.cvtColor(image,cv.COLOR_BGR2GRAY)
+    #histogram(currImage, image)
     my_label = Label(root, text = "Black and White Berhasil Di Tambahkan!")
     my_label.pack()
     root.title("Black and White")
@@ -108,6 +112,7 @@ def quantize():
     image = np.array(currImage)
     image = Image.fromarray(currImage) 
     image = image.quantize(quantize_value)
+   # histogram(currImage, image)
     my_label = Label(root, text = "Quantize Berhasil Di Tambahkan!")
     my_label.pack()
     root.title("Quantization")
@@ -119,6 +124,7 @@ def negative():
 
     image = np.array(currImage) 
     image = 255-currImage
+    histogram(currImage, image)
     my_label = Label(root, text = "Negative Berhasil Di Tambahkan!")
     my_label.pack()
     root.title("Negative")
@@ -126,10 +132,13 @@ def negative():
 
 def intensity():
     global currImage, my_label
+    
     value = simpledialog.askinteger("Intensity Input", "Input", minvalue=0, maxvalue=254)
     image = np.array(currImage)
     for k in range(0,value):
         image[:,:] = np.where(image[:,:]* 1.03 < 255, (image[:,:] * 1.03).astype(np.uint8) , image[:,:])
+    
+    histogram(currImage, image)
     my_label = Label(root, text = "Intensitas Berhasil Di Tambahkan!")
     my_label.pack()
     root.title("Intensity")
@@ -138,36 +147,82 @@ def intensity():
 
 def rgb():
     global currImage, my_label
-
-    v = IntVar()
-    
-    def sel(value):  # pass new scale value
-        blue = int(scale1.get())
-        value = blue
-        return value
-    
-    scale1 = Scale(root, from_=50, to=255, orient=HORIZONTAL, variable=v, command=sel)
-    blue = int(scale1.get())
-    scale1.pack()
-    scale2 = Scale(root, from_=0, to=255,orient=HORIZONTAL)
-    green = int(scale2.get())
-    scale2.pack()
-    scale3 = Scale(root, from_=0, to=255,orient=HORIZONTAL)
-    red = int(scale3.get())
-    scale3.pack()
     B,G,R = cv.split(currImage)
+    red = cv.equalizeHist(R)
+    green = cv.equalizeHist(G)
+    blue = cv.equalizeHist(B)
     image = np.array(currImage)
-    image = cv.merge([B+60,G+30,R+100])
-
-    button = Button(root, text="Submit", command=sel)
-    button.pack()
+    image = cv.merge([blue,green,red])
+    histogram(currImage,image)
     my_label = Label(root, text = "RGB Berhasil Di Tambahkan!")
     my_label.pack()
     root.title("RGB")
     return image
 
-def applySampling():
+def filterLowPass():
+    global currImage, my_label
     image = np.array(currImage)
+    kernel = np.ones((5,5),np.float32)/25
+    image = cv.filter2D(image,-1,kernel)
+    histogram(currImage, image)
+    my_label = Label(root, text = "Filter Low Pass Berhasil Di Tambahkan!")
+    my_label.pack()
+    root.title("Low Pass Filter")
+    return image
+
+def filterHighPass():
+    global currImage, my_label
+    image = np.array(currImage)
+    kernel = np.array([[0.0, -1.0, 0.0], 
+                   [-1.0, 4.0, -1.0],
+                   [0.0, -1.0, 0.0]])
+    kernel = kernel/(np.sum(kernel) if np.sum(kernel)!=0 else 1)
+    image = cv.filter2D(image,-1,kernel)
+    histogram(currImage, image)
+    my_label = Label(root, text = "Filter High Pass Berhasil Di Tambahkan!")
+    my_label.pack()
+    root.title("High Pass Filter")
+    return image
+
+def filterBandPass():
+    global currImage, my_label
+    image = np.array(currImage)
+    kernel = np.array([[1.0, -2.0, 1.0], 
+                   [-2.0, 5.0, -2.0],
+                   [1.0, -2.0, 1.0]])
+    kernel = kernel/(np.sum(kernel) if np.sum(kernel)!=0 else 1)
+    image = cv.filter2D(image,-1,kernel)
+    histogram(currImage, image)
+    my_label = Label(root, text = "Filter Band Pass Berhasil Di Tambahkan!")
+    my_label.pack()
+    root.title("Band Pass Filter")
+    return image
+
+def histogram(bfr,aft):
+    color = ('b','g','r')
+    fig,ax = plt.subplots(2,1)
+    for i,col in enumerate(color):
+        histr = cv.calcHist([bfr],[i],None,[256],[0,256])
+        histrAft= cv.calcHist([aft],[i],None,[256],[0,256])
+        ax[0].plot(histr, color=col)
+        ax[1].plot(histrAft, color=col)
+        plt.xlim([0,256])
+    plt.show()
+
+    
+
+def fig2img(fig):
+    """Convert a Matplotlib figure to a PIL Image and return it"""
+    import io
+    global edited_image
+    buf = io.BytesIO()
+    fig.savefig(buf)
+    buf.seek(0)
+    temp = Image.open(buf)
+    return temp
+
+def applySampling():
+    image = np.array(currImage) 
     if(effect == 'Sampling'):
         image = sampling(image)
         image = Image.fromarray(image)
@@ -178,9 +233,8 @@ def applySampling():
     panelB.image = image
 
 def applyRGB():
-    
     image = np.array(currImage)
-    if(effect == 'RGB'):
+    if(effect == 'RGB Equalization'):
         image = rgb(image)
         image = Image.fromarray(image)
     image = rgb()
@@ -188,7 +242,8 @@ def applyRGB():
     image = ImageTk.PhotoImage(image)
     panelB.configure(image=image)
     panelB.image = image
-
+    
+    
 def applyBW():
     image = np.array(currImage)
     if(effect == 'Black and White'):
@@ -234,6 +289,41 @@ def applyIntensity():
     panelB.configure(image=image)
     panelB.image = image
 
+def applyLowPass():
+    image = np.array(currImage)
+    if(effect == 'Low Pass Filter'):
+        image = filterLowPass(image)
+        image = Image.fromarray(image)
+    image = filterLowPass()
+    image = Image.fromarray(image)  
+    image = ImageTk.PhotoImage(image)
+    panelB.configure(image=image)
+    panelB.image = image
+
+def applyHighPass():
+    image = np.array(currImage)
+    if(effect == 'High Pass Filter'):
+        image = filterHighPass(image)
+        image = Image.fromarray(image)
+    image = filterHighPass()
+    image = Image.fromarray(image)  
+    image = ImageTk.PhotoImage(image)
+    panelB.configure(image=image)
+    panelB.image = image
+
+
+def applyBandPass():
+    image = np.array(currImage)
+    if(effect == 'Band Pass Filter'):
+        image = filterBandPass(image)
+        image = Image.fromarray(image)
+    image = filterBandPass()
+    image = Image.fromarray(image)  
+    image = ImageTk.PhotoImage(image)
+    panelB.configure(image=image)
+    panelB.image = image
+    
+
 
 
 def menu():
@@ -248,13 +338,19 @@ def menu():
     menubar.add_cascade(label='File', menu=filemenu)
 
     fileedit = Menu(menubar, tearoff=0)
+    submenu = Menu(fileedit)
     fileedit.add_command(label='Sampling', command=applySampling)
     fileedit.add_command(label='Quantization', command = applyQuantize)
     fileedit.add_command(label='Black and White', command = applyBW)
     fileedit.add_command(label='Negative', command=applyNegative)
     fileedit.add_command(label='Intensity', command=applyIntensity)
-    fileedit.add_command(label='RGB', command=applyRGB)
+    fileedit.add_command(label='RGB Equalization', command=applyRGB)
+    submenu.add_command(label = 'Low Pass Filter', command=applyLowPass)
+    submenu.add_command(label = 'High Pass Filter', command=applyHighPass)
+    submenu.add_command(label = 'Band Pass Filter', command=applyBandPass)
+    fileedit.add_cascade(label='Filter', menu = submenu)
     menubar.add_cascade(label='Edit', menu = fileedit)
+
     root.config(menu=menubar)
 
     mainloop()
